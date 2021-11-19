@@ -1,161 +1,276 @@
 /*
-===Contact & Support===
-Website: http://eeenthusiast.com/
-Youtube: https://www.youtube.com/EEEnthusiast
-Facebook: https://www.facebook.com/EEEnthusiast/
-Patreon: https://www.patreon.com/EE_Enthusiast
-Revision: 1.0 (July 13th, 2016)
-===Hardware===
-- Arduino Uno R3
-- MPU-6050 (Available from: http://eeenthusiast.com/product/6dof-mpu-6050-accelerometer-gyroscope-temperature/)
-===Software===
-- Latest Software: https://github.com/VRomanov89/EEEnthusiast/tree/master/MPU-6050%20Implementation/MPU6050_Implementation
-- Arduino IDE v1.6.9
-- Arduino Wire library
-===Terms of use===
-The software is provided by EEEnthusiast without warranty of any kind. In no event shall the authors or 
-copyright holders be liable for any claim, damages or other liability, whether in an action of contract, 
-tort or otherwise, arising from, out of or in connection with the software or the use or other dealings in 
-the software.
+BSLI SUBSCALE NOVEMBER 19 2021
+Logs data from MPU6050, ICM 20948, BMP280 in 'data.txt' file on SD Card.
 */
 
+
+
+#include <Arduino.h>
 #include <Wire.h>
+#include <SoftwareSerial.h>
+#include <Adafruit_BMP280.h>
+#include <Adafruit_ICM20948.h>
+#include <Adafruit_ICM20X.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_MPU6050.h>
+#include <SPI.h>
+#include <SD.h>
 
-long accelX, accelY, accelZ;
+Adafruit_ICM20948 icm;
+Adafruit_MPU6050 mpu;
+Adafruit_BMP280 bmp;
+#define LEDPIN 0
+#define button_pin 12
+#define cal_time_sec 5
+
+long accelX, accelY, accelZ, current_micros; //micros overflows in 70 minutes!
+
 float gForceX, gForceY, gForceZ, gMag, offsets[4];
-
 
 long gyroX, gyroY, gyroZ;
 float rotX, rotY, rotZ;
 
+long loop_count = 0;
+
+sensors_event_t accel;
+sensors_event_t gyro;
+sensors_event_t mag;
+sensors_event_t temp;
+
+sensors_event_t mpu_a, mpu_g, mpu_temp;
+
+float bmp_p, bmp_t;
+
+
+File f;
+
+void printData();
+void printDataSD();
+void printSDHeader();
+void logDataSD();
+void logSDHeader();
+void findOffsets(float * offsets);
+void printOffsets(float * offsets);
+void LED(int time);
+
 void setup() {
-  Serial.begin(9600);
-  delay(100);
-  Wire.begin();
-  setupMPU();
-  findOffsets(offsets);
+  pinMode(LEDPIN, OUTPUT);
+  for (int i = 0; i < 40; i++) {
+    //Blink for 8 seconds after power on
+    LED(100);
+    delay(100);
+  }
+  Serial.begin(115200);
+  LED(5000);
+  Serial.print("Initializing SD card...");
+
+  if (!SD.begin(BUILTIN_SDCARD)) {
+    Serial.println("initialization failed!");
+    digitalWrite(LEDPIN, HIGH);
+    while (1);
+  }
+  Serial.println("initialization done.");
+  f = SD.open("data.txt", FILE_WRITE);
+  LED(100);
+  delay(50);
+  LED(100);
+  delay(50);
+  LED(100);
+  mpu.begin(0x68, &Wire);
+  bmp.begin();
+  icm.begin_I2C();
+  mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
+  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
+  /* Default settings from datasheet. */
+  bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
+                  Adafruit_BMP280::SAMPLING_X16,     /* Temp. oversampling */
+                  Adafruit_BMP280::SAMPLING_X16,    /* Pressure oversampling */
+                  Adafruit_BMP280::FILTER_X16,      /* Filtering. */
+                  Adafruit_BMP280::STANDBY_MS_1); /* Standby time. */
+  printSDHeader();
+  logSDHeader();
 }
 
 
 void loop() {
-  recordAccelRegisters();
-  recordGyroRegisters();
-  printDataPlotter();
-  delay(10);
-}
-
-void setupMPU(){
-  Wire.beginTransmission(0b1101000); //This is the I2C address of the MPU (b1101000/b1101001 for AC0 low/high datasheet sec. 9.2)
-  Wire.write(0x6B); //Accessing the register 6B - Power Management (Sec. 4.28)
-  Wire.write(0b00000000); //Setting SLEEP register to 0. (Required; see Note on p. 9)
-  Wire.endTransmission();  
-  Wire.beginTransmission(0b1101000); //I2C address of the MPU
-  Wire.write(0x1B); //Accessing the register 1B - Gyroscope Configuration (Sec. 4.4) 
-  Wire.write(0x00000000); //Setting the gyro to full scale +/- 250deg./s 
-  Wire.endTransmission(); 
-  Wire.beginTransmission(0b1101000); //I2C address of the MPU
-  Wire.write(0x1C); //Accessing the register 1C - Acccelerometer Configuration (Sec. 4.5) 
-  Wire.write(0b00000000); //Setting the accel to +/- 2g
-  Wire.endTransmission(); 
-}
-
-void recordAccelRegisters() {
-  Wire.beginTransmission(0b1101000); //I2C address of the MPU
-  Wire.write(0x3B); //Starting register for Accel Readings
-  Wire.endTransmission();
-  Wire.requestFrom(0b1101000,6); //Request Accel Registers (3B - 40)
-  while(Wire.available() < 6);
-  accelX = Wire.read()<<8|Wire.read(); //Store first two bytes into accelX
-  accelY = Wire.read()<<8|Wire.read(); //Store middle two bytes into accelY
-  accelZ = Wire.read()<<8|Wire.read(); //Store last two bytes into accelZ
-  processAccelData();
-}
-
-void processAccelData(){
-  gForceX = accelX / 16384.0;
-  gForceY = accelY / 16384.0; 
-  gForceZ = accelZ / 16384.0;
-
-  //magnitude of acceleration in three dimensions + the calculated offset
-  gMag = sqrt(sq(gForceX) + sq(gForceY) + sq(gForceZ)) + offsets[0];
-}
-
-void recordGyroRegisters() {
-  Wire.beginTransmission(0b1101000); //I2C address of the MPU
-  Wire.write(0x43); //Starting register for Gyro Readings
-  Wire.endTransmission();
-  Wire.requestFrom(0b1101000,6); //Request Gyro Registers (43 - 48)
-  while(Wire.available() < 6);
-  gyroX = Wire.read()<<8|Wire.read(); //Store first two bytes into accelX
-  gyroY = Wire.read()<<8|Wire.read(); //Store middle two bytes into accelY
-  gyroZ = Wire.read()<<8|Wire.read(); //Store last two bytes into accelZ
-  processGyroData();
-}
-
-void processGyroData() {
-  rotX = gyroX / 131.0 + offsets[1];
-  rotY = gyroY / 131.0 + offsets[2];
-  rotZ = gyroZ / 131.0 + offsets[3];
-}
-
-void printData() {
-  Serial.print("Gyro (deg)");
-  Serial.print(" X=");
-  Serial.print(rotX);
-  Serial.print(" Y=");
-  Serial.print(rotY);
-  Serial.print(" Z=");
-  Serial.print(rotZ);
-  Serial.print(" Accel (g)");
-  Serial.print(" X=");
-  Serial.print(gForceX);
-  Serial.print(" Y=");
-  Serial.print(gForceY);
-  Serial.print(" Z=");
-  Serial.print(gForceZ);
-  Serial.print(" gMag =");
-  Serial.println(gMag);
-}
-
-void printDataPlotter() {
-  Serial.print(rotX);
-  Serial.print("\t");
-  Serial.print(rotY);
-  Serial.print("\t");
-  Serial.print(rotZ);
-  Serial.print("\t");
-  Serial.print(gForceX);
-  Serial.print("\t");
-  Serial.print(gForceY);
-  Serial.print("\t");
-  Serial.print(gForceZ);
-  Serial.print("\t");
-  Serial.println("");
-//  Serial.print(" gMag =");
-//  Serial.println(gMag);
-}
-
-//Calculates offsets over 100 measurements and saves them to the input array
-void findOffsets(float * offsets) {
-  float sumGMag = 0;
-  float sumXAcc = 0;
-  float sumYAcc = 0;
-  float sumZAcc = 0;
-  for (int i = 0; i < 100; i++) {
-    recordAccelRegisters();
-    recordGyroRegisters();
-    sumGMag += gMag;
-    sumXAcc += rotX;
-    sumYAcc += rotY;
-    sumZAcc += rotZ;
-    delay(10);
+  loop_count ++;
+  current_micros = micros(); //Record time
+    //ICM 20649
+  icm.getEvent(&accel, &gyro, &temp, &mag);
+  //MPU 6050
+  mpu.getEvent(&mpu_a, &mpu_g, &mpu_temp);
+  //BMP 280
+  bmp_p = bmp.readPressure();
+  bmp_t = bmp.readTemperature();
+  logDataSD();
+  printDataSD();
+  f.flush();
+  if (loop_count % 100 == 0) {
+    LED(1);
   }
-  float averageGMag = sumGMag / 100;
-  float averageXAcc = sumXAcc / 100;
-  float averageYAcc = sumYAcc / 100;
-  float averageZAcc = sumZAcc / 100;
-  offsets[0] = 1 - averageGMag;
-  offsets[1] = 0 - averageXAcc;
-  offsets[2] = 0 - averageYAcc;
-  offsets[3] = 0 - averageZAcc;
+  else {
+  }
+}
+
+void printDataSD() {
+  Serial.print(current_micros, 10);
+  //mpu 6050
+  Serial.print(" ");
+  Serial.print(mpu_g.gyro.x, 10);
+  Serial.print(" ");
+  Serial.print(mpu_g.gyro.y, 10);
+  Serial.print(" ");
+  Serial.print(mpu_g.gyro.z, 10);
+  Serial.print(" ");
+  Serial.print(mpu_a.acceleration.x, 10);
+  Serial.print(" ");
+  Serial.print(mpu_a.acceleration.y, 10);
+  Serial.print(" ");
+  Serial.print(mpu_a.acceleration.z, 10);
+  Serial.print(" ");
+  Serial.print(mpu_temp.temperature, 4);
+  Serial.print(" ");
+  Serial.print(bmp_p, 4);
+  Serial.print(" ");
+  Serial.print(bmp_t, 4);
+  //icm 20948
+  Serial.print(" ");
+  Serial.print(gyro.gyro.x, 10);
+  Serial.print(" ");
+  Serial.print(gyro.gyro.y, 10);
+  Serial.print(" ");
+  Serial.print(gyro.gyro.z, 10);
+  Serial.print(" ");
+  Serial.print(accel.acceleration.x, 10);
+  Serial.print(" ");
+  Serial.print(accel.acceleration.y, 10);
+  Serial.print(" ");
+  Serial.print(accel.acceleration.z, 10);
+  Serial.println();
+}
+
+void logDataSD() {
+  f.print(current_micros, 10);
+  //mpu 6050
+  f.print(" ");
+  f.print(mpu_g.gyro.x, 10);
+  f.print(" ");
+  f.print(mpu_g.gyro.y, 10);
+  f.print(" ");
+  f.print(mpu_g.gyro.z, 10);
+  f.print(" ");
+  f.print(mpu_a.acceleration.x, 10);
+  f.print(" ");
+  f.print(mpu_a.acceleration.y, 10);
+  f.print(" ");
+  f.print(mpu_a.acceleration.z, 10);
+  f.print(" ");
+  f.print(mpu_temp.temperature, 4);
+  f.print(" ");
+  f.print(bmp_p, 4);
+  f.print(" ");
+  f.print(bmp_t, 4);
+  //icm 20948
+  f.print(" ");
+  f.print(gyro.gyro.x, 10);
+  f.print(" ");
+  f.print(gyro.gyro.y, 10);
+  f.print(" ");
+  f.print(gyro.gyro.z, 10);
+  f.print(" ");
+  f.print(accel.acceleration.x, 10);
+  f.print(" ");
+  f.print(accel.acceleration.y, 10);
+  f.print(" ");
+  f.print(accel.acceleration.z, 10);
+  f.println();
+}
+
+void logSDHeader() {
+  f.print("T+ [us] ");
+  f.print("MPU 6050: ");
+  f.print("X Rad/s ");
+  f.print("Y Rad/s ");
+  f.print("Z Rad/s ");
+  f.print("X m/s^2 ");
+  f.print("Y m/s^2 ");
+  f.print("Z m/s^2 ");
+  f.print("IMU Temp [c] ");
+  f.print("BMP280 Pressure [Pa] ");
+  f.print("BMP280 Temperature [c] ");
+  f.print("ICM 20948: ");
+  f.print("X Rad/s ");
+  f.print("Y Rad/s ");
+  f.print("Z Rad/s ");
+  f.print("X m/s^2 ");
+  f.print("Y m/s^2 ");
+  f.print("Z m/s^2 ");
+  f.println();
+}
+
+void printSDHeader() {
+  Serial.print("T+ [us] ");
+  Serial.print("MPU 6050: ");
+  Serial.print("X Rad/s ");
+  Serial.print("Y Rad/s ");
+  Serial.print("Z Rad/s ");
+  Serial.print("X m/s^2 ");
+  Serial.print("Y m/s^2 ");
+  Serial.print("Z m/s^2 ");
+  Serial.print("IMU Temp [c] ");
+  Serial.print("BMP280 Pressure [Pa] ");
+  Serial.print("BMP280 Temperature [c] ");
+  Serial.print("ICM 20948: ");
+  Serial.print("X Rad/s ");
+  Serial.print("Y Rad/s ");
+  Serial.print("Z Rad/s ");
+  Serial.print("X m/s^2 ");
+  Serial.print("Y m/s^2 ");
+  Serial.print("Z m/s^2 ");
+  Serial.println();
+}
+
+//Calculates offsets and saves them to the input array --- NOT USED
+// void findOffsets(float * offsets) {
+//   float sumGMag = 0;
+//   float sumXGyro = 0;
+//   float sumYGyro = 0;
+//   float sumZGyro = 0;
+//   int iterations = (cal_time_sec * 100);
+//   for (int i = 0; i < iterations; i++) {
+//     recordAccelRegisters();
+//     recordGyroRegisters();
+//     sumGMag += gMag;
+//     sumXGyro += rotX;
+//     sumYGyro += rotY;
+//     sumZGyro += rotZ;
+//     delay(10);
+//   }
+//   float averageGMag = sumGMag / iterations;
+//   float averageXAcc = sumXGyro / iterations;
+//   float averageYAcc = sumYGyro / iterations;
+//   float averageZAcc = sumZGyro / iterations;
+//   offsets[0] = 1 - averageGMag;
+//   offsets[1] = 0 - averageXAcc;
+//   offsets[2] = 0 - averageYAcc;
+//   offsets[3] = 0 - averageZAcc;
+// }
+
+void printOffsets(float * offsets) {
+  Serial.print("G offset: ");
+  Serial.print(offsets[0]);
+  Serial.print(" X Gyro Offset: ");
+  Serial.print(offsets[1]);
+  Serial.print(" Y Gyro Offset: ");
+  Serial.print(offsets[2]);
+  Serial.print(" Z Gyro Offset: ");
+  Serial.print(offsets[3]);
+  Serial.println();
+}
+
+void LED(int time) {
+  digitalWrite(LEDPIN, HIGH);
+  delay (time);
+  digitalWrite(LEDPIN, LOW);
 }

@@ -82,6 +82,8 @@ void setup() {
   mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
   mpu.setGyroRange(MPU6050_RANGE_500_DEG);
   mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
+  icm.setAccelRange(ICM20948_ACCEL_RANGE_8_G);
+  icm.setGyroRange(ICM20948_GYRO_RANGE_500_DPS);
   /* Default settings from datasheet. */
   bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
                   Adafruit_BMP280::SAMPLING_X16,     /* Temp. oversampling */

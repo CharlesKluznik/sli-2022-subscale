@@ -107,11 +107,12 @@ void loop() {
   bmp_t = bmp.readTemperature();
   logDataSD();
   printDataSD();
-  f.flush();
-  if (loop_count % 100 == 0) {
-    LED(1);
+  if (loop_count == 100) {
+    digitalWrite(LEDPIN, HIGH);
+    loop_count = 0;
   }
-  else {
+  else if (loop_count == 50) {
+    digitalWrite(LEDPIN, LOW);
   }
 }
 

@@ -1,5 +1,6 @@
 #modified from https://toptechboy.com/9-axis-imu-lesson-21-visualizing-3d-rotations-in-vpython-using-quaternions/ 
 from vpython import *
+from vpython.no_notebook import stop_server
 from time import *
 import numpy as np
 import math
@@ -18,14 +19,16 @@ xarrow=arrow(lenght=2, shaftwidth=.1, color=color.red,axis=vector(1,0,0))
 yarrow=arrow(lenght=2, shaftwidth=.1, color=color.green,axis=vector(0,1,0))
 zarrow=arrow(lenght=4, shaftwidth=.1, color=color.blue,axis=vector(0,0,1))
  
-frontArrow=arrow(length=4,shaftwidth=.1,color=color.purple,axis=vector(1,0,0))
-upArrow=arrow(length=1,shaftwidth=.1,color=color.magenta,axis=vector(0,1,0))
-sideArrow=arrow(length=2,shaftwidth=.1,color=color.orange,axis=vector(0,0,1))
+frontArrow=arrow(length=4,shaftwidth=.2,color=color.purple,axis=vector(1,0,0))
+upArrow=arrow(length=1,shaftwidth=.2,color=color.magenta,axis=vector(0,1,0))
+sideArrow=arrow(length=2,shaftwidth=.2,color=color.orange,axis=vector(0,0,1))
 
 print("Reading data...")
 with open(f'{__file__}/../quat.txt', 'r') as file:
-    while (True):
-        data=file.readline().split(' ')
+    lines_read: int = 0
+    data=file.readline().split(' ')
+    while (len(data) > 1):
+        lines_read += 1
         q0=float(data[0])
         q1=float(data[1])
         q2=float(data[2])
@@ -44,7 +47,8 @@ with open(f'{__file__}/../quat.txt', 'r') as file:
         frontArrow.axis=k
         sideArrow.axis=cross(k,vrot)
         upArrow.axis=vrot
-        # sideArrow.length=2
-        # frontArrow.length=4
-        # upArrow.length=1
-        rate(200) #limit max fps to 200
+        data=file.readline().split(' ')
+        rate(90) #limit max fps to 200
+        print(lines_read)
+    print(f'Finished on line {lines_read}')
+stop_server()

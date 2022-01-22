@@ -29,18 +29,18 @@ if True:
 
     with open('data_calibration.txt', 'r') as file:
         orientation = ahrs.filters.mahony.Mahony()
-        Q = np.array([1., 0., 0., 0.])
+        Q = np.array([0., 0., 0., 1.])
         line = file.readline() #get rid of the header
         lines_read: int = 0
         #find first time stamp - !GETS RID OF FIRST LINE OF DATA!
-        t_old: float = (int(file.readline().split(' ')[0]) / 1e+9)
+        t_old: float = (int(file.readline().split(' ')[0]) / 1e+6)
         with open('quat.txt', 'w') as out:
             while line:
                 line = file.readline()
                 data = line.split(' ')
                 if len(data) > 1: #replace this conditional
                     lines_read += 1
-                    t_now: float = (int(data[0]) / 1e+9)
+                    t_now: float = (int(data[0]) / 1e+6)
                     #get gyroscope measurements
                     gyro: list = [float(data[1]), float(data[2]), float(data[3])]
                     #get accelerometer measurements
@@ -49,7 +49,8 @@ if True:
                     Q = orientation.updateIMU(q = Q, gyr = np.array([gyro[0], gyro[1], gyro[2]]), acc=np.array([accel[0], accel[1], accel[2]]))
                     #ahrs.filter_update(0.001, 0.001, 0.001, -.001, -.001, -9.7, 0.1)
                     t_old = t_now
-                    q_string = np.array2string(Q, separator=" ").strip('[]')
-                    print(f'{q_string}')
+                    out.write(f'{Q[0]} {Q[1]} {Q[2]} {Q[3]}\n')
+                    euler:list = euler_from_quaternion(Q[0], Q[1], Q[2], Q[3])
+                    print(f'{math.degrees(euler[0])} {math.degrees(euler[1])} {math.degrees(euler[2])}')
                 else:
                     print(f'Finished reading at line {lines_read}')

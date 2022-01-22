@@ -15,9 +15,9 @@ scene.forward=vector(-1,-1,-1)
 scene.width=1200
 scene.height=1080
  
-xarrow=arrow(lenght=2, shaftwidth=.1, color=color.red,axis=vector(1,0,0))
-yarrow=arrow(lenght=2, shaftwidth=.1, color=color.green,axis=vector(0,1,0))
-zarrow=arrow(lenght=4, shaftwidth=.1, color=color.blue,axis=vector(0,0,1))
+xarrow=arrow(length=4, shaftwidth=.1, color=color.red,axis=vector(1,0,0))
+yarrow=arrow(length=4, shaftwidth=.1, color=color.green,axis=vector(0,1,0))
+zarrow=arrow(length=4, shaftwidth=.1, color=color.blue,axis=vector(0,0,1))
  
 frontArrow=arrow(length=4,shaftwidth=.2,color=color.purple,axis=vector(1,0,0))
 upArrow=arrow(length=1,shaftwidth=.2,color=color.magenta,axis=vector(0,1,0))
@@ -44,11 +44,14 @@ with open(f'{__file__}/../quat.txt', 'r') as file:
         v=cross(s,k)
         vrot=v*cos(roll)+cross(k,v)*sin(roll)
 
-        frontArrow.axis=k
-        sideArrow.axis=cross(k,vrot)
-        upArrow.axis=vrot
+        frontArrow.axis=-vrot
+        sideArrow.axis=-cross(k,vrot)
+        upArrow.axis=-k
         data=file.readline().split(' ')
-        rate(90) #limit max fps to 200
+        frontArrow.length = 4
+        upArrow.length = 1
+        sideArrow.length = 2
         print(lines_read)
+        rate(150) #limit max fps to 200
     print(f'Finished on line {lines_read}')
 stop_server()

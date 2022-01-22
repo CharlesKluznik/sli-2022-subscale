@@ -94,4 +94,3 @@ class AHRS():
         self.SEq_2 /= norm
         self.SEq_3 /= norm
         self.SEq_4 /= norm
-

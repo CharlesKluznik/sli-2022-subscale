@@ -52,6 +52,9 @@ with open(f'{__file__}/../quat.txt', 'r') as file:
         upArrow.length = 2
         sideArrow.length = 2
         print(lines_read)
+        #Update label every 50 lines
+        if (lines_read % 50 == 0):
+            label(text = str(lines_read), background = vector(0,1,0), line=False, xoffset = 200)
         rate(150) #limit max fps to 150 
     print(f'Finished on line {lines_read}')
 stop_server()

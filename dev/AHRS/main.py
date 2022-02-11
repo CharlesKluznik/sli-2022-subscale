@@ -1,32 +1,9 @@
-from mahony import *
 import math
 import ahrs
 import numpy as np
+from util import *
 
 if (__name__ == "__main__"):
-    
-    def euler_from_quaternion(x, y, z, w):
-        """
-        Convert a quaternion into euler angles (roll, pitch, yaw)
-        roll is rotation around x in radians (counterclockwise)
-        pitch is rotation around y in radians (counterclockwise)
-        yaw is rotation around z in radians (counterclockwise)
-        https://automaticaddison.com/how-to-convert-a-quaternion-into-euler-angles-in-python/
-        """
-        t0 = +2.0 * (w * x + y * z)
-        t1 = +1.0 - 2.0 * (x * x + y * y)
-        roll_x = math.atan2(t0, t1)
-     
-        t2 = +2.0 * (w * y - z * x)
-        t2 = +1.0 if t2 > +1.0 else t2
-        t2 = -1.0 if t2 < -1.0 else t2
-        pitch_y = math.asin(t2)
-
-        t3 = +2.0 * (w * z + x * y)
-        t4 = +1.0 - 2.0 * (y * y + z * z)
-        yaw_z = math.atan2(t3, t4)
-     
-        return roll_x, pitch_y, yaw_z # in radians
     with open('data_subscale2.txt', 'r') as file:
         orientation = ahrs.filters.mahony.Mahony()
         Q = np.array([0., 1., 0., 1.])

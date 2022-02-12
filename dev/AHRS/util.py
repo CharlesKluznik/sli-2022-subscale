@@ -1,14 +1,21 @@
+"""File containing utility functions used elsewhere in the payload.
+"""
+
 import math
-"""Utility functions.
-"""
-"""
-Convert a quaternion into euler angles (roll, pitch, yaw)
-roll is rotation around x in radians (counterclockwise)
-pitch is rotation around y in radians (counterclockwise)
-yaw is rotation around z in radians (counterclockwise)
-https://automaticaddison.com/how-to-convert-a-quaternion-into-euler-angles-in-python/
-"""
-def euler_from_quaternion(x, y, z, w):
+#Utility functions.
+
+
+def euler_from_quaternion(x: float, y: float, z: float, w: float):
+    """
+    Convert a quaternion into euler angles (roll, pitch, yaw)
+    roll is rotation around x in radians (counterclockwise)
+    pitch is rotation around y in radians (counterclockwise)
+    yaw is rotation around z in radians (counterclockwise)
+    https://automaticaddison.com/how-to-convert-a-quaternion-into-euler-angles-in-python/
+
+    Parameters:
+    x, y, z, w (float) : components of quaternion
+    """
     t0 = +2.0 * (w * x + y * z)
     t1 = +1.0 - 2.0 * (x * x + y * y)
     roll_x = math.atan2(t0, t1)

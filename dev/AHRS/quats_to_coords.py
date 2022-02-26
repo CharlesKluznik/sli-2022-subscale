@@ -24,10 +24,10 @@ def quatsToCoords():
     # Beta = np.zeros((N, 4))  # Initialize quats (don't know how to get quat data from other function)
     # Beta = [Q[0], Q[1], Q[2], Q[3]] #Get quat data from other function
 
-    t = data[:, 0]  # Time data (data.txt column 0)
-    axB = data[:, 4] # X coord Acc. data (data.txt column 3)
-    ayB = data[:, 5] 
-    azB = data[:, 6] 
+    t = data[:, 0] * 1e-6  # Time data (data.txt column 0)
+    axB = data[:, 13] + x_a_offset# X coord Acc. data (data.txt column 3)
+    ayB = data[:, 14] + y_a_offset
+    azB = data[:, 15] + z_a_offset
 
     b0 = quats[:, 0]  # Quat 1 data (quat function column 3)
     b1 = quats[:, 1]
@@ -73,16 +73,21 @@ def quatsToCoords():
     #     temp_sum += aI[j]
     #     vI.append( (t[j] - t[0]) * temp_sum * 0.5 * 1e-6)
     # vI = np.array(vI)
-    
+
     vI = []
     
     for j in range(len(quats)):
-        temp_sum = aI[0]
+        temp_sumx = 0
+        temp_sumy = 0
+        temp_sumz = 0
         for k in range(1, j):
-            temp_sum += (2 * aI[k])
-        temp_sum += aI[j]
-        vI.append( (t[j] - t[0]) * temp_sum * 0.5 * 1e-6)
+            temp_sumx += (t[k] - t[k-1]) * (aI[k][0] + aI[k-1][0]) * 0.5
+            temp_sumy += (t[k] - t[k-1]) * (aI[k][1] + aI[k-1][1]) * 0.5
+            temp_sumz += (t[k] - t[k-1]) * (aI[k][2] + aI[k-1][2]) * 0.5
+        vI.append([temp_sumx, temp_sumy, temp_sumz])
     vI = np.array(vI)
+
+    print(vI[len(vI) - 1])
 
     # ----------------5: TrapZ integration of Inertial Vel to Inertial Pos----------------------
 
@@ -95,16 +100,18 @@ def quatsToCoords():
     #     temp_sum += vI[j]
     #     dI.append( (t[j] - t[0]) * temp_sum * 0.5 * 1e-6)
 
+    
     dI = []
-    temp_sum = vI[0]
-    for j in range(len(quats)):
-        temp_sum += (2 * vI[k])
-        temp_sum += vI[j]
-        dI.append( (t[j] - t[0]) * temp_sum * 0.5 * 1e-6)
-
+    temp_sumx = 0
+    temp_sumy = 0
+    temp_sumz = 0
+    for j in range(1,len(quats)):
+        temp_sumx += (t[j] - t[j-1]) * (vI[j][0] + vI[j-1][0]) * 0.5
+        temp_sumy += (t[j] - t[j-1]) * (vI[j][1] + vI[j-1][1]) * 0.5
+        temp_sumz += (t[j] - t[j-1]) * (vI[j][2] + vI[j-1][2]) * 0.5
+    dI.append([temp_sumx, temp_sumy, temp_sumz])
     dI = np.array(dI)
-
-    print(dI[len(dI) -1])
+    print(dI[len(dI) - 1])
 
 
 

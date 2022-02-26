@@ -18,7 +18,7 @@ def quatsToCoords():
     # Beta = quaternions (Columns 1,2,3,4)
 
 
-    data = np.loadtxt("data_accel_cal.txt", skiprows=1, dtype=float)  # Import data.txt file
+    data = np.loadtxt("data_subscale_prelaunch.txt", skiprows=1, dtype=float)  # Import data.txt file
     N = len(data)  # Find number of rows of data
     quats = np.loadtxt("quat.txt", dtype=float)
     # Beta = np.zeros((N, 4))  # Initialize quats (don't know how to get quat data from other function)
@@ -61,6 +61,9 @@ def quatsToCoords():
     for i in range(len(quats)):
         aI.append( np.dot(np.linalg.inv(RBIarray[i]), np.transpose(aB[i]) )) # Acc in Inertial Ref Frame (IRF)
     aI = np.array(aI)
+
+    for i in range(len(aI)):
+        aI[i][2] -= 9.8
 
     # ----------------4: TrapZ integration of Inertial Acc to Inertial Vel----------------------
 

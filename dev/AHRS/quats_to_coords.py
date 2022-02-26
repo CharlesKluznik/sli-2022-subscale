@@ -18,16 +18,16 @@ def quatsToCoords():
     # Beta = quaternions (Columns 1,2,3,4)
 
 
-    data = np.loadtxt("data_calibration.txt", skiprows=1, dtype=float)  # Import data.txt file
+    data = np.loadtxt("data_accel_cal.txt", skiprows=1, dtype=float)  # Import data.txt file
     N = len(data)  # Find number of rows of data
     quats = np.loadtxt("quat.txt", dtype=float)
     # Beta = np.zeros((N, 4))  # Initialize quats (don't know how to get quat data from other function)
     # Beta = [Q[0], Q[1], Q[2], Q[3]] #Get quat data from other function
 
     t = data[:, 0]  # Time data (data.txt column 0)
-    axB = data[:, 3] + x_a_offset  # X coord Acc. data (data.txt column 3)
-    ayB = data[:, 4] + y_a_offset
-    azB = data[:, 5] + z_a_offset
+    axB = data[:, 4] # X coord Acc. data (data.txt column 3)
+    ayB = data[:, 5] 
+    azB = data[:, 6] 
 
     b0 = quats[:, 0]  # Quat 1 data (quat function column 3)
     b1 = quats[:, 1]
@@ -48,56 +48,60 @@ def quatsToCoords():
                        [2*(b1[i]*b2[i]-b0[i]*b3[i]),            b0[i]**2-b1[i]**2+b2[i] ** 2-b3[i]**2,      2*(b2[i]*b3[i]+b0[i]*b1[i])],
                        [2*(b1[i]*b3[i]+b0[i]*b2[i]),            2*(b2[i]*b3[i]-b0[i]*b1[i]),                b0[i]**2-b1[i]**2-b2[i]**2+b3[i]**2]] )
 
+    RBIarray = np.array(RBIarray)
     # ----------------3: Convert Acc to Inertial Reference Frame----------------------------
     # aB = np.transpose([axB, ayB, azB])  # Acc in Body Ref Frame (BRF)
     aB = []
     for i in range(len(data)):
-        aB.append([axB,ayB,azB])
+        aB.append([axB[i],ayB[i],azB[i]])
     aB = np.array(aB)
     aI = []  # Acc in Inertial Ref Frame (IRF)
 
     # Tried doing this for all data
     for i in range(len(quats)):
-        aI.append( np.dot(np.linalg.inv(RBIarray[i]), aB[i] )) # Acc in Inertial Ref Frame (IRF)
+        aI.append( np.dot(np.linalg.inv(RBIarray[i]), np.transpose(aB[i]) )) # Acc in Inertial Ref Frame (IRF)
     aI = np.array(aI)
-
 
     # ----------------4: TrapZ integration of Inertial Acc to Inertial Vel----------------------
 
     # vI = []
-    # temp_sum = aI[0]
+    
     # for j in range(len(quats)):
+    #     temp_sum = aI[0]
     #     for k in range(1, j):
-    #         temp_sum += (t[k] - t[k+1]) * ((aI[k] + aI[k+1])/2)
+    #         temp_sum += (2 * aI[k])
     #     temp_sum += aI[j]
-    #     vI.append(temp_sum)
+    #     vI.append( (t[j] - t[0]) * temp_sum * 0.5 * 1e-6)
     # vI = np.array(vI)
-
+    
     vI = []
-    temp = 0
-    for j in range(1,len(quats)):
-        temp += ( (t[j] - t[j-1]) * (aI[j] + aI[j-1]) * 0.5 )
-        vI.append(temp)
+    
+    for j in range(len(quats)):
+        temp_sum = aI[0]
+        for k in range(1, j):
+            temp_sum += (2 * aI[k])
+        temp_sum += aI[j]
+        vI.append( (t[j] - t[0]) * temp_sum * 0.5 * 1e-6)
     vI = np.array(vI)
-
 
     # ----------------5: TrapZ integration of Inertial Vel to Inertial Pos----------------------
 
     # dI = []
     # temp_sum = vI[0]
     # for j in range(len(quats)):
+    #     temp_sum = aI[0]
     #     for k in range(1, j):
     #         temp_sum += (2 * vI[k])
     #     temp_sum += vI[j]
-    #     dI.append( (t[j] - t[0]) * temp_sum * 0.5)
+    #     dI.append( (t[j] - t[0]) * temp_sum * 0.5 * 1e-6)
 
-    # dI = np.array(dI)
-    
     dI = []
-    temp = 0
-    for j in range(1,len(quats)-1):
-        temp += ( (t[j] - t[j-1]) * (vI[j] + vI[j-1]) * 0.5 )
-        dI.append(temp)
+    temp_sum = vI[0]
+    for j in range(len(quats)):
+        temp_sum += (2 * vI[k])
+        temp_sum += vI[j]
+        dI.append( (t[j] - t[0]) * temp_sum * 0.5 * 1e-6)
+
     dI = np.array(dI)
 
     print(dI[len(dI) -1])

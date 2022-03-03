@@ -14,7 +14,7 @@ x_r_offset = 0.03201130448281042
 y_r_offset = -0.01767855554417916
 z_r_offset = -0.00030196657169167786
 
-startLaunch = 0
+BOOST_TIME = 1.5
 
 if True:
     
@@ -43,13 +43,14 @@ if True:
      
         return roll_x, pitch_y, yaw_z # in radians
 
-    with open('data_s.txt', 'r') as file:
+    with open('cleaned_data.txt', 'r', encoding='latin-1') as file:
         orientation = ahrs.filters.mahony.Mahony()
         Q = np.array([0., 1., 0., 1.])
         line = file.readline() #get rid of the header
         lines_read: int = 0
         #find first time stamp - !GETS RID OF FIRST LINE OF DATA!
         t_old: float = (int(file.readline().split(' ')[0]) / 1e+6)
+        startLaunch = 0
         with open('quat.txt', 'w') as out:
             while line:
                 line = file.readline()
@@ -61,7 +62,7 @@ if True:
                     if (float(data[13]) > 20):
                         startLaunch = int(data[0])
 
-                    if (int(data[0]) - startLaunch < 1.5e6):
+                    if (int(data[0]) - startLaunch < (BOOST_TIME * 1e6)):
                         gyro: list = [float(data[10]), 0, 0]
                         accel: list = [9.8, 0, 0]
                     else:
@@ -73,11 +74,11 @@ if True:
                     
                     orientation.Dt = t_now - t_old
                     Q = orientation.updateIMU(q = Q, gyr = np.array([gyro[0], gyro[1], gyro[2]]), acc=np.array([accel[0], accel[1], accel[2]]))
-                    #ahrs.filter_update(0.001, 0.001, 0.001, -.001, -.001, -9.7, 0.1)
                     t_old = t_now
                     out.write(f'{Q[0]} {Q[1]} {Q[2]} {Q[3]}\n')
                     euler:list = euler_from_quaternion(Q[0], Q[1], Q[2], Q[3])
-                    print(f'{math.degrees(euler[0])} {math.degrees(euler[1])} {math.degrees(euler[2])}')
+                    # print(f'{math.degrees(euler[0])} {math.degrees(euler[1])} {math.degrees(euler[2])}')
+                    # print(lines_read)
                     dT = np.append(dT,float(data[0]))
                     yaw = np.append(yaw,float(data[1]))
                 else:

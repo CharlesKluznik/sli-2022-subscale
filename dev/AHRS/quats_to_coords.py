@@ -1,9 +1,14 @@
+import string
 import numpy as np
 import pandas as pd
 
 x_a_offset = -0.01137564357366827
 y_a_offset = 0.12418234651448756
 z_a_offset = -0.04117713395608824
+
+METERS_TO_FEET = 3.28084
+
+alphabet = list(string.ascii_lowercase)[0:20]
 
 def quatsToCoords():
 
@@ -18,7 +23,7 @@ def quatsToCoords():
     # Beta = quaternions (Columns 1,2,3,4)
 
 
-    data = np.loadtxt("data_subscale_prelaunch.txt", skiprows=1, dtype=float)  # Import data.txt file
+    data = np.loadtxt("cleaned_data.txt", skiprows=1, dtype=float)  # Import data.txt file
     N = len(data)  # Find number of rows of data
     quats = np.loadtxt("quat.txt", dtype=float)
     # Beta = np.zeros((N, 4))  # Initialize quats (don't know how to get quat data from other function)
@@ -34,12 +39,13 @@ def quatsToCoords():
     b2 = quats[:, 2]
     b3 = quats[:, 3]
 
+    barom = data[:, 8]
+    start_altitude = barom[0]
+    apogee_index = np.where(barom==min(barom))[0][0]
+    max_barom_after_apogee = max(barom[apogee_index:])
+    print('apogee index:',apogee_index)
+
     # -----------------2: Convert Quaternions into rotation matrix---------------------------
-    # From Aero 3520 Matlab script
-    # RBI = [[b0**2+b1**2-b2**2-b3**2,       2*(b1*b2+b0*b3),       2*(b1*b3-b0*b2)],
-    #     [2*(b1*b2-b0*b3),   b0**2-b1**2+b2**2-b3**2,       2*(b2*b3+b0*b1)],
-    #     [2*(b1*b3+b0*b2),       2*(b2*b3-b0*b1),   b0**2-b1**2-b2**2+b3**2]]
-    
 
     RBIarray = []
 
@@ -50,7 +56,6 @@ def quatsToCoords():
 
     RBIarray = np.array(RBIarray)
     # ----------------3: Convert Acc to Inertial Reference Frame----------------------------
-    # aB = np.transpose([axB, ayB, azB])  # Acc in Body Ref Frame (BRF)
     aB = []
     for i in range(len(data)):
         aB.append([axB[i],ayB[i],azB[i]])
@@ -70,53 +75,72 @@ def quatsToCoords():
     # vI = []
     
     # for j in range(len(quats)):
-    #     temp_sum = aI[0]
+    #     temp_sumx = 0
+    #     temp_sumy = 0
+    #     temp_sumz = 0
     #     for k in range(1, j):
-    #         temp_sum += (2 * aI[k])
-    #     temp_sum += aI[j]
-    #     vI.append( (t[j] - t[0]) * temp_sum * 0.5 * 1e-6)
+    #         temp_sumx += (t[k] - t[k-1]) * (aI[k][0] + aI[k-1][0]) * 0.5
+    #         temp_sumy += (t[k] - t[k-1]) * (aI[k][1] + aI[k-1][1]) * 0.5
+    #         temp_sumz += (t[k] - t[k-1]) * (aI[k][2] + aI[k-1][2]) * 0.5
+    #     vI.append([temp_sumx, temp_sumy, temp_sumz])
     # vI = np.array(vI)
 
-    vI = []
-    
-    for j in range(len(quats)):
-        temp_sumx = 0
-        temp_sumy = 0
-        temp_sumz = 0
-        for k in range(1, j):
-            temp_sumx += (t[k] - t[k-1]) * (aI[k][0] + aI[k-1][0]) * 0.5
-            temp_sumy += (t[k] - t[k-1]) * (aI[k][1] + aI[k-1][1]) * 0.5
-            temp_sumz += (t[k] - t[k-1]) * (aI[k][2] + aI[k-1][2]) * 0.5
-        vI.append([temp_sumx, temp_sumy, temp_sumz])
+    vI = [[0,0,0]]
+
+    for i in range(1,len(quats)):
+        sumx = vI[i-1][0] + (t[i] - t[i-1]) * aI[i][0]
+        sumy = vI[i-1][1] + (t[i] - t[i-1]) * aI[i][1]
+        sumz = vI[i-1][2] + (t[i] - t[i-1]) * aI[i][2]
+        vI.append([sumx, sumy, sumz])
     vI = np.array(vI)
 
-    print(vI[len(vI) - 1])
+
+    print("final velocities:",vI[len(vI) - 1])
 
     # ----------------5: TrapZ integration of Inertial Vel to Inertial Pos----------------------
-
-    # dI = []
-    # temp_sum = vI[0]
-    # for j in range(len(quats)):
-    #     temp_sum = aI[0]
-    #     for k in range(1, j):
-    #         temp_sum += (2 * vI[k])
-    #     temp_sum += vI[j]
-    #     dI.append( (t[j] - t[0]) * temp_sum * 0.5 * 1e-6)
-
     
     dI = []
-    temp_sumx = 0
-    temp_sumy = 0
-    temp_sumz = 0
-    for j in range(1,len(quats)):
-        temp_sumx += (t[j] - t[j-1]) * (vI[j][0] + vI[j-1][0]) * 0.5
-        temp_sumy += (t[j] - t[j-1]) * (vI[j][1] + vI[j-1][1]) * 0.5
-        temp_sumz += (t[j] - t[j-1]) * (vI[j][2] + vI[j-1][2]) * 0.5
-    dI.append([temp_sumx, temp_sumy, temp_sumz])
+    sumx = sumy = sumz = 0
+    z_max = z_max_line = 0
+    j = 0
+    while j < (len(quats)-1) and not (barom[j] == max_barom_after_apogee and j > apogee_index):
+        sumx += (t[j] - t[j-1]) * (vI[j][0] + vI[j-1][0]) * 0.5
+        sumy += (t[j] - t[j-1]) * (vI[j][1] + vI[j-1][1]) * 0.5
+        sumz += (t[j] - t[j-1]) * (vI[j][2] + vI[j-1][2]) * 0.5
+        if (sumz > z_max): 
+            z_max = sumz 
+            z_max_line = j
+        if (j==apogee_index): print("passed apogee (lowest baro value), height reads {0:.2f}ft, line is {1}".format(sumz*METERS_TO_FEET, j))
+        j+=1
+    print("stopping at line", j)
+    dI.append(sumx)
+    dI.append(sumy)
+    dI.append(sumz)
     dI = np.array(dI)
-    print(dI[len(dI) - 1])
+    print("MAX Z: {0:.2f}ft at line {1}".format(z_max*METERS_TO_FEET, z_max_line))
+    print("final displacements:",dI)
 
+    # ---------------6: Conversion from final displacements to box coordinates
 
+    finalx = dI[0] * METERS_TO_FEET
+    finaly = dI[1] * METERS_TO_FEET
+    finalz = dI[2] * METERS_TO_FEET
+
+    indexX = 10 + ( (int) (finalx/250))
+    indexY = 10 - ( (int) (finaly/250))
+
+    if (finalx < 0): indexX -= 1
+    if (finaly > 0): indexY -= 1
+
+    boxX = alphabet[indexX].upper()
+    boxY = alphabet[indexY]
+
+    print("Final Results:")
+    print("X: {0:.2f}ft".format(finalx))
+    print("Y: {0:.2f}ft".format(finaly))
+    print("Z: {0:.2f}ft".format(finalz))
+    print("Box: ({0}, {1})".format(boxX, boxY))
 
 quatsToCoords()
 
+   

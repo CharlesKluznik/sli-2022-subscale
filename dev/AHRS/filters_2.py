@@ -14,6 +14,7 @@ x_r_offset = 0.03201130448281042
 y_r_offset = -0.01767855554417916
 z_r_offset = -0.00030196657169167786
 
+
 BOOST_TIME = 1.5
 
 if True:
@@ -64,7 +65,7 @@ if True:
 
                     if (int(data[0]) - startLaunch < (BOOST_TIME * 1e6)):
                         gyro: list = [float(data[10]), 0, 0]
-                        accel: list = [9.8, 0, 0]
+                        accel: list = [float(data[13]), 0, 0]
                     else:
                         gyro: list = [float(data[10]) + x_r_offset, float(data[11]) + y_r_offset, float(data[12]) + z_r_offset]
                         accel: list = [float(data[13]) + x_a_offset, float(data[14]) + y_a_offset, float(data[15]) + z_a_offset]

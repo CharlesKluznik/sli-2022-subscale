@@ -50,14 +50,14 @@ def quatsToCoords():
     RBIarray = []
 
     for i in range(len(quats)):
-        RBIarray.append( [[b0[i]**2+b1[i]**2-b2[i]**2-b3[i]**2,    2*(b1[i]*b2[i]+b0[i]*b3[i]),                2*(b1[i]*b3[i]-b0[i]*b2[i])],
-                       [2*(b1[i]*b2[i]-b0[i]*b3[i]),            b0[i]**2-b1[i]**2+b2[i] ** 2-b3[i]**2,      2*(b2[i]*b3[i]+b0[i]*b1[i])],
-                       [2*(b1[i]*b3[i]+b0[i]*b2[i]),            2*(b2[i]*b3[i]-b0[i]*b1[i]),                b0[i]**2-b1[i]**2-b2[i]**2+b3[i]**2]] )
+        RBIarray.append( [[(b0[i]**2)+(b1[i]**2)-(b2[i]**2)-(b3[i]**2),    2*((b1[i]*b2[i])+(b0[i]*b3[i])),       2*((b1[i]*b3[i])-(b0[i]*b2[i]))],
+                       [2*((b1[i]*b2[i])-(b0[i]*b3[i])),        (b0[i]**2)-(b1[i]**2)+(b2[i]**2)-(b3[i]**2),      2*((b2[i]*b3[i])+(b0[i]*b1[i]))],
+                       [2*((b1[i]*b3[i])+(b0[i]*b2[i])),            2*((b2[i]*b3[i])-(b0[i]*b1[i])),                (b0[i]**2)-(b1[i]**2)-(b2[i]**2)+(b3[i]**2)]] )
 
     RBIarray = np.array(RBIarray)
     # ----------------3: Convert Acc to Inertial Reference Frame----------------------------
     aB = []
-    for i in range(len(data)):
+    for i in range(len(quats)):
         aB.append([axB[i],ayB[i],azB[i]])
     aB = np.array(aB)
     aI = []  # Acc in Inertial Ref Frame (IRF)
@@ -68,7 +68,10 @@ def quatsToCoords():
     aI = np.array(aI)
 
     for i in range(len(aI)):
-        aI[i][2] -= 9.8
+        aI[i][2] -= 9.81
+
+
+    # print(aI[1:10])
 
     # ----------------4: TrapZ integration of Inertial Acc to Inertial Vel----------------------
 
@@ -87,6 +90,8 @@ def quatsToCoords():
 
     vI = [[0,0,0]]
 
+    
+
     for i in range(1,len(quats)):
         sumx = vI[i-1][0] + ((t[i] - t[i-1]) * (aI[i][0] + aI[i-1][0]) * 0.5)
         sumy = vI[i-1][1] + ((t[i] - t[i-1]) * (aI[i][1] + aI[i-1][1]) * 0.5)
@@ -94,41 +99,43 @@ def quatsToCoords():
         vI.append([sumx, sumy, sumz])
     vI = np.array(vI)
 
+    # print(vI[1:10])
 
     print("final velocities:",vI[len(vI) - 1])
 
     # ----------------5: TrapZ integration of Inertial Vel to Inertial Pos----------------------
     
-    dI = []
+    dI = [[0,0,0]]
     sumx = sumy = sumz = 0
     z_max = z_max_line = 0
-    j = 0
-    while j < (len(quats)-1) and not (barom[j] == max_barom_after_apogee and j > apogee_index):
-        sumx += (t[j] - t[j-1]) * (vI[j][0] + vI[j-1][0]) * 0.5
-        sumy += (t[j] - t[j-1]) * (vI[j][1] + vI[j-1][1]) * 0.5
-        sumz += (t[j] - t[j-1]) * (vI[j][2] + vI[j-1][2]) * 0.5
+    j = 1
+    # while j < (len(quats)-1) and not (j>apogee_index and barom[j] == max_barom_after_apogee):
+    while j < (len(quats)-1) and not (j>apogee_index and barom[j] >= start_altitude):
+    # while j < (len(quats)-1):
+        sumx = dI[j-1][0] + ((t[j] - t[j-1]) * (vI[j][0] + vI[j-1][0]) * 0.5)
+        sumy = dI[j-1][1] + ((t[j] - t[j-1]) * (vI[j][1] + vI[j-1][1]) * 0.5)
+        sumz = dI[j-1][2] + ((t[j] - t[j-1]) * (vI[j][2] + vI[j-1][2]) * 0.5)
 
+        dI.append([sumx, sumy, sumz])
         # sumx += (t[j] - t[j-1]) * (vI[j][0])
         # sumy += (t[j] - t[j-1]) * (vI[j][1])
         # sumz += (t[j] - t[j-1]) * (vI[j][2])
+
         if (sumz > z_max): 
             z_max = sumz 
             z_max_line = j
-        if (j==apogee_index): print("passed apogee (lowest baro value), height reads {0:.2f}ft, line is {1}".format(sumz*METERS_TO_FEET, j))
+        if (j==apogee_index): print("at lowest baro value, height reads {0:.2f}ft, line is {1}".format(sumz*METERS_TO_FEET, j))
         j+=1
-    print("stopping at line", j)
-    dI.append(sumx)
-    dI.append(sumy)
-    dI.append(sumz)
     dI = np.array(dI)
+    print("stopping at line", j)
     print("MAX Z: {0:.2f}ft at line {1}".format(z_max*METERS_TO_FEET, z_max_line))
-    print("final displacements:",dI)
+    print("final displacements:",dI[len(dI)-1])
 
-    # ---------------6: Conversion from final displacements to box coordinates
+    # ---------------6: Conversion from final displacements to box coordinates--------------------------
 
-    finalx = dI[0] * METERS_TO_FEET
-    finaly = dI[1] * METERS_TO_FEET
-    finalz = dI[2] * METERS_TO_FEET
+    finalx = dI[len(dI)-1][0] * METERS_TO_FEET
+    finaly = dI[len(dI)-1][1] * METERS_TO_FEET
+    finalz = dI[len(dI)-1][2] * METERS_TO_FEET
 
     indexX = 10 + ( (int) (finalx/250))
     indexY = 10 - ( (int) (finaly/250))

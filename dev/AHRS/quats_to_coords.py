@@ -72,7 +72,7 @@ def quatsToCoords():
 
     # ----------------4: TrapZ integration of Inertial Acc to Inertial Vel----------------------
 
-    # vI = []
+    vI = []
     
     # for j in range(len(quats)):
     #     temp_sumx = 0
@@ -88,9 +88,9 @@ def quatsToCoords():
     vI = [[0,0,0]]
 
     for i in range(1,len(quats)):
-        sumx = vI[i-1][0] + (t[i] - t[i-1]) * aI[i][0]
-        sumy = vI[i-1][1] + (t[i] - t[i-1]) * aI[i][1]
-        sumz = vI[i-1][2] + (t[i] - t[i-1]) * aI[i][2]
+        sumx = vI[i-1][0] + ((t[i] - t[i-1]) * (aI[i][0] + aI[i-1][0]) * 0.5)
+        sumy = vI[i-1][1] + ((t[i] - t[i-1]) * (aI[i][1] + aI[i-1][1]) * 0.5)
+        sumz = vI[i-1][2] + ((t[i] - t[i-1]) * (aI[i][2] + aI[i-1][2]) * 0.5)
         vI.append([sumx, sumy, sumz])
     vI = np.array(vI)
 
@@ -107,6 +107,10 @@ def quatsToCoords():
         sumx += (t[j] - t[j-1]) * (vI[j][0] + vI[j-1][0]) * 0.5
         sumy += (t[j] - t[j-1]) * (vI[j][1] + vI[j-1][1]) * 0.5
         sumz += (t[j] - t[j-1]) * (vI[j][2] + vI[j-1][2]) * 0.5
+
+        # sumx += (t[j] - t[j-1]) * (vI[j][0])
+        # sumy += (t[j] - t[j-1]) * (vI[j][1])
+        # sumz += (t[j] - t[j-1]) * (vI[j][2])
         if (sumz > z_max): 
             z_max = sumz 
             z_max_line = j

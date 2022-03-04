@@ -6,9 +6,15 @@ from util import *
 import traceback
 
 #accelerometer offsets
-X_OFFSET: float = -0.0113756
-Y_OFFSET: float = 0.1241823
-Z_OFFSET: float = -0.0411771
+x_a_offset = -0.01137564357366827
+y_a_offset = 0.12418234651448756
+z_a_offset = -0.04117713395608824
+
+x_r_offset = 0.03201130448281042
+y_r_offset = -0.01767855554417916
+z_r_offset = -0.00030196657169167786
+
+BOOST_TIME = 1.5
 
 
 def process_data(input:str, verbose: bool):
@@ -37,11 +43,17 @@ def process_data(input:str, verbose: bool):
                             lines_read += 1
                             t_now: float = (int(data[0]) / 1e+6) #convert microseconds to seconds
                             #get gyroscope measurements
-                            gyro: list = [float(data[10]), float(data[11]), float(data[12])]
-                            #get accelerometer measurements
-                            accel: list = [float(data[13]), float(data[14]), float(data[15])]
+                            if (float(data[13]) > 20):
+                                startLaunch = int(data[0])
+
+                            if (int(data[0]) - startLaunch < (BOOST_TIME * 1e6)):
+                                gyro: list = [float(data[10]), 0, 0]
+                                accel: list = [float(data[13]), 0, 0]
+                            else:
+                                gyro: list = [float(data[10]) + x_r_offset, float(data[11]) + y_r_offset, float(data[12]) + z_r_offset]
+                                accel: list = [float(data[13]) + x_a_offset, float(data[14]) + y_a_offset, float(data[15]) + z_a_offset]
                             orientation.Dt = t_now - t_old
-                            Q = orientation.updateIMU(q = Q, gyr = np.array([gyro[0], gyro[1], gyro[2]]), acc=np.array([accel[0]+X_OFFSET, accel[1]+Y_OFFSET, accel[2]+Z_OFFSET]))
+                            Q = orientation.updateIMU(q = Q, gyr = np.array([gyro[0]+x_r_offset, gyro[1]+y_r_offset, gyro[2]+z_r_offset]), acc=np.array([accel[0]+z_a_offset, accel[1]+y_a_offset, accel[2]+z_a_offset]))
                             t_old = t_now
                             out.write(f'{Q[0]} {Q[1]} {Q[2]} {Q[3]}\n') #write current quaternion to output file
                             if (verbose):  print_eulers(Q)

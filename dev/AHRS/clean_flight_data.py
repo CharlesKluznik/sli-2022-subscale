@@ -15,7 +15,9 @@ with open("data_subscale.txt", "r") as inFile:
             line = inFile.readline()
             if len(line) > 0:
                 tokens = line.split(' ')
-                if (data[apogee_index][0] - (SECS_BEFORE_APOGEE * 1e6) < float(tokens[0]) and float(tokens[0]) < data[apogee_index][0] + (SECS_AFTER_APOGEE * 1e6)):
+                if (data[apogee_index][0] - (SECS_BEFORE_APOGEE * 1e6) < float(tokens[0]) 
+                    and float(tokens[0]) < data[apogee_index][0] + (SECS_AFTER_APOGEE * 1e6) 
+                    and not ('�' in line)):
                     outFile.write(line)
                     lines_written+=1
                     # print(lines_written)

@@ -50,12 +50,15 @@ def get_timestamp() -> str:
     return datetime.now().strftime('%D:%H:%M:%S')
 
 def clean_data(fName: str):
+    MAX_LONG = 2147483647
+    overflowed = 0
     SECS_BEFORE_APOGEE = 1
     SECS_AFTER_APOGEE = 1
     data = np.loadtxt(fName, skiprows=1, dtype=float)
     barom = data[:, 1]
     apogee_index = np.where(barom==min(barom))[0][0]
     lines_written = 0
+    last_t = 0
     with open(fName, 'r') as inFile:
         line = inFile.readline()
         with open(os.path.join(sys.path[0], 'cleaned_data.txt'), 'w') as outFile:
@@ -63,6 +66,13 @@ def clean_data(fName: str):
                 line = inFile.readline()
                 if len(line) > 0:
                     tokens = line.split(' ')
+                    tokens[0] = int(tokens[0])
+                    #detect overflow
+                    if tokens[0] < 0 and last_t > 0:
+                        overflowed += 1
+                        print("Overflowed!")
+                    last_t = tokens[0]
+                    tokens[0] = tokens[0] + overflowed * MAX_LONG;
                     #get gyroscope measurements
                     gyro1: list = [float(tokens[3]), float(tokens[4]), float(tokens[5])]
                     gyro2: list = [float(tokens[11]), float(tokens[12]), float(tokens[13])]
@@ -80,3 +90,9 @@ def clean_data(fName: str):
                         and not ('�' in line)):
                         outFile.write(f'{tokens[0]} {gyro[0]} {gyro[1]} {gyro[2]} {accel[0]} {accel[1]} {accel[2]} {baro[0]} {baro[1]}\n')
                         lines_written+=1
+
+def copy_logs():
+    ts = datetime.now().strftime('%m-%d-%Y-%H-%M-%S')
+    shutil.copyfile(os.path.join(sys.path[0], 'serial.txt'),os.path.join(sys.path[0], f'serial-{ts}.txt'))
+    shutil.copyfile(os.path.join(sys.path[0], 'quat.txt'),os.path.join(sys.path[0], f'quat-{ts}.txt'))
+    shutil.copyfile(os.path.join(sys.path[0], 'cleaned_data.txt'),os.path.join(sys.path[0], f'cleaned_data-{ts}.txt'))

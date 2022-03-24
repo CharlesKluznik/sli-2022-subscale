@@ -29,7 +29,7 @@ def process_orientation(input:str, verbose: bool):
     verbose (bool) : set to True for more verbose console output
     """
     try:
-        with open(f'{__file__}\..\{input}', 'r') as file:
+        with open(os.path.join(sys.path[0], input), 'r') as file:
             if (verbose): print('Data file successfully opened.')
             orientation = ahrs.filters.mahony.Mahony()
             Q = np.array([0., 1., 0., 1.])
@@ -39,7 +39,7 @@ def process_orientation(input:str, verbose: bool):
             t_old: float = (int(file.readline().split(' ')[0]) / 1e+6) #convert microseconds to seconds
             start_launch: int = 0
             try:
-                with open(f'{__file__}\..\quat.txt', 'w') as out:
+                with open(os.path.join(sys.path[0], 'quat.txt'), 'w') as out:
                     if (verbose): print('Output file successfully opened')
                     while line:
                         line = file.readline()
@@ -48,15 +48,15 @@ def process_orientation(input:str, verbose: bool):
                             lines_read += 1
                             t_now: float = (int(data[0]) / 1e+6) #convert microseconds to seconds
                             #get gyroscope measurements
-                            if (float(data[13]) > 20):
+                            if (float(data[4]) > 20):
                                 start_launch = int(data[0])
 
                             if (int(data[0]) - start_launch < (BOOST_TIME * 1e6)):
-                                gyro: list = [float(data[10]), 0, 0]
-                                accel: list = [float(data[13]), 0, 0]
+                                gyro: list = [float(data[1]), 0, 0]
+                                accel: list = [float(data[4]), 0, 0]
                             else:
-                                gyro: list = [float(data[10]) + x_r_offset, float(data[11]) + y_r_offset, float(data[12]) + z_r_offset]
-                                accel: list = [float(data[13]) + x_a_offset, float(data[14]) + y_a_offset, float(data[15]) + z_a_offset]
+                                gyro: list = [float(data[1]) + x_r_offset, float(data[2]) + y_r_offset, float(data[3]) + z_r_offset]
+                                accel: list = [float(data[4]) + x_a_offset, float(data[5]) + y_a_offset, float(data[6]) + z_a_offset]
                             orientation.Dt = t_now - t_old
                             Q = orientation.updateIMU(q = Q, gyr = np.array([gyro[0]+x_r_offset, gyro[1]+y_r_offset, gyro[2]+z_r_offset]), acc=np.array([accel[0]+z_a_offset, accel[1]+y_a_offset, accel[2]+z_a_offset]))
                             t_old = t_now
@@ -66,15 +66,15 @@ def process_orientation(input:str, verbose: bool):
                         else:
                             print(f'Finished reading at line {lines_read}.')
             except OSError as ex:
-                print(f'Opening output file failed. Exception: {ex.__class__}')
+                print(f'Opening output file failed. Exception: {ex}')
                 traceback.print_exc(ex)
             else:
                 if (verbose): print(f'Finished writing quaternion values to file.')
     except OSError as ex:
-        print(f'Opening input file failed. Exception: {ex.__class__}')
+        print(f'Opening input file failed. Exception: {ex}')
         traceback.print_exc(ex)
 
-def process_position() -> Tuple[str, str]:
+def process_position() -> Tuple[str, str, float, float]:
 
     """Processes orientation, acceleration, and time data to obtain estimated final coordinate.
     Inputs: Acceleration Data, Quaternions, Velocity Data (Outputted from this script)
@@ -133,8 +133,6 @@ def process_position() -> Tuple[str, str]:
     # print(aI[1:10])
 
     # ----------------4: TrapZ integration of Inertial Acc to Inertial Vel----------------------
-    #TODO does this need to be defined twice? 
-    vI = []
     vI = [[0,0,0]]
 
     for i in range(1,len(quats)):
@@ -181,7 +179,6 @@ def process_position() -> Tuple[str, str]:
     if (finalx < 0): indexX -= 1
     if (finaly > 0): indexY -= 1
 
-    #TODO: Should only X be uppercase?
     boxX = alphabet[indexX].upper()
     boxY = alphabet[indexY]
 
@@ -190,7 +187,7 @@ def process_position() -> Tuple[str, str]:
     print("Y: {0:.2f}ft".format(finaly))
     print("Z: {0:.2f}ft".format(finalz))
     print("Box: ({0}, {1})".format(boxX, boxY))
-
+    return [boxX, boxY, finalx, finaly]
 
 
 def print_eulers(Q: np.ndarray):

@@ -7,13 +7,15 @@ import sys
 import os
 from time import sleep
 
-sys.stdout = open(os.path.join(sys.path[0], 'payload_log.txt'), 'w')
+print('Payload init.\n')
+print(f'Time: {get_timestamp()\n')
+sys.stdout = open(os.path.join(sys.path[0], 'payload_log.txt'), 'a')
 sys.stderr = sys.stdout
 
 SERIAL_PORT: str = '/dev/ttyACM0'
 
 if (__name__ == "__main__"):
-    print(f'{get_timestamp()} RPi Online.\n')
+    print(f'\n{get_timestamp()} RPi Online.\n')
     #initialize lora radio and send a hearbeat
     lora_init()
     lora_hearbeat()
@@ -40,14 +42,19 @@ if (__name__ == "__main__"):
 
     #generate position estimate
     print(f'{get_timestamp()} Begin Position Estimate.') 
-    coordinate: Tuple[str, str] = process_position(os.path.join(sys.path[0], 'cleaned_data.txt'))
+    coordinate: Tuple[str, str, float, float] = process_position()
     print(f'{get_timestamp()} End Position Estimate.')
     lora_hearbeat()
 
     #transmit orientation via radio
     print(f'{get_timestamp()} RPi Finished. Transmitting coordinate.')
 
+    iterations: int = 0
     while True:
-        #transmit position estimate
-        lora_transmit(f'X: {coordinate[0]}, Y: {coordinate[1]}')
-        sleep(0.5)
+        i +=1
+        if (i == 5):
+            copy_logs()
+        else:
+            #transmit position estimate
+            lora_transmit(f'{coordinate[2]} {coordinate[3]} {coordinate[0]}{coordinate[1]}')
+            sleep(0.5)

@@ -8,15 +8,17 @@ import traceback
 from string import ascii_lowercase
 
 #accelerometer offsets
-x_a_offset = -0.01137564357366827
-y_a_offset = 0.12418234651448756
-z_a_offset = -0.04117713395608824
+x_a_offset = -0.013935435808253516
+y_a_offset = 0.06577907349181444
+z_a_offset = -0.29430891423708694
 #gyroscope offsets
-x_r_offset = 0.03201130448281042
-y_r_offset = -0.01767855554417916
-z_r_offset = -0.00030196657169167786
+x_r_offset = -0.015656377845680053
+y_r_offset = -0.004889019366450798
+z_r_offset = -0.0008502849349076886
 #duration of boost phase
-BOOST_TIME = 1.5
+BOOST_TIME = 3.1
+
+# x_a_offset = y_a_offset = z_a_offset = x_r_offset = y_r_offset = z_r_offset = 0
 
 METERS_TO_FEET = 3.28084
 alphabet = list(ascii_lowercase)[0:20]
@@ -32,7 +34,7 @@ def process_orientation(input:str, verbose: bool):
         with open(os.path.join(sys.path[0], input), 'r') as file:
             if (verbose): print('Data file successfully opened.')
             orientation = ahrs.filters.mahony.Mahony()
-            Q = np.array([0., 1., 0., 1.])
+            Q = np.array([0., 0., 1., 1.])
             line = file.readline() #get rid of the header
             lines_read: int = 0
             #find first time stamp - !GETS RID OF FIRST LINE OF DATA!
@@ -48,12 +50,13 @@ def process_orientation(input:str, verbose: bool):
                             lines_read += 1
                             t_now: float = (int(data[0]) / 1e+6) #convert microseconds to seconds
                             #get gyroscope measurements
-                            if (float(data[4]) > 20):
+                            if float(data[5]) > 20 and start_launch == 0:
                                 start_launch = int(data[0])
+                                print("Starting lock at line", lines_read)
 
                             if (int(data[0]) - start_launch < (BOOST_TIME * 1e6)):
-                                gyro: list = [float(data[1]), 0, 0]
-                                accel: list = [float(data[4]), 0, 0]
+                                gyro: list = [0,float(data[2]),0]
+                                accel: list = [0,float(data[5]),0]
                             else:
                                 gyro: list = [float(data[1]) + x_r_offset, float(data[2]) + y_r_offset, float(data[3]) + z_r_offset]
                                 accel: list = [float(data[4]) + x_a_offset, float(data[5]) + y_a_offset, float(data[6]) + z_a_offset]
@@ -100,7 +103,8 @@ def process_position() -> Tuple[str, str, float, float]:
     b2 = quats[:, 2]
     b3 = quats[:, 3]
 
-    barom = data[:, 8]
+    barom = data[:, 7]
+    temp = data[:, 8]
     start_altitude = barom[0]
     apogee_index = np.where(barom==min(barom))[0][0]
     print('apogee index:',apogee_index)
@@ -126,11 +130,9 @@ def process_position() -> Tuple[str, str, float, float]:
         aI.append( np.dot(np.linalg.inv(RBIarray[i]), np.transpose(aB[i]) )) # Acc in Inertial Ref Frame (IRF)
     aI = np.array(aI)
 
+
     for i in range(len(aI)):
         aI[i][2] -= 9.81
-
-
-    # print(aI[1:10])
 
     # ----------------4: TrapZ integration of Inertial Acc to Inertial Vel----------------------
     vI = [[0,0,0]]
@@ -151,7 +153,7 @@ def process_position() -> Tuple[str, str, float, float]:
     z_max = z_max_line = 0
     j = 1
 
-    while j < (len(quats)-1) and not (j>apogee_index and barom[j] >= start_altitude):
+    while j < (len(quats)-1):
         sumx = dI[j-1][0] + ((t[j] - t[j-1]) * (vI[j][0] + vI[j-1][0]) * 0.5)
         sumy = dI[j-1][1] + ((t[j] - t[j-1]) * (vI[j][1] + vI[j-1][1]) * 0.5)
         sumz = dI[j-1][2] + ((t[j] - t[j-1]) * (vI[j][2] + vI[j-1][2]) * 0.5)
@@ -167,17 +169,40 @@ def process_position() -> Tuple[str, str, float, float]:
     print("MAX Z: {0:.2f}ft at line {1}".format(z_max*METERS_TO_FEET, z_max_line))
     print("final displacements:",dI[len(dI)-1])
 
+    height_by_barom = []
+    p0 = barom[0]
+    t0 = temp[0]
+    adjustment_count = 0
+    for i in range(1, len(data)-1):
+        height_by_barom.append( ( ( pow((p0/barom[i]), 1/5.257) - 1) * (0.5*((273.15+t0)+(273.15+temp[i]))) ) / 0.0065 )
+        check = (height_by_barom[len(height_by_barom)-1] - dI[len(height_by_barom)-1][2])
+        if ((check * np.sign(check)) > 10/METERS_TO_FEET): 
+            adjustment_count+=1
+            dI[len(height_by_barom)-1][2] += check
+
+    height_by_barom = np.array(height_by_barom)
+    with open("differences.txt", "w") as out:
+        for i in range(len(height_by_barom)):
+            out.write("{0} {1} {2}\n".format(height_by_barom[i] * METERS_TO_FEET, dI[i][2] * METERS_TO_FEET, METERS_TO_FEET * (height_by_barom[i] - dI[i][2]))); 
+        out.write(str(adjustment_count))
+
     # ---------------6: Conversion from final displacements to box coordinates--------------------------
 
     finalx = dI[len(dI)-1][0] * METERS_TO_FEET
     finaly = dI[len(dI)-1][1] * METERS_TO_FEET
     finalz = dI[len(dI)-1][2] * METERS_TO_FEET
 
+    if finalx > 2500: finalx = 2499
+    if finalx < -2500: finalx = -2499
+    if finaly > 2500: finaly = 2499
+    if finaly < -2500: finaly = -2499
+
     indexX = 10 + ( (int) (finalx/250))
     indexY = 10 - ( (int) (finaly/250))
 
     if (finalx < 0): indexX -= 1
     if (finaly > 0): indexY -= 1
+
 
     boxX = alphabet[indexX].upper()
     boxY = alphabet[indexY]
@@ -197,3 +222,4 @@ def print_eulers(Q: np.ndarray):
     """
     euler:list = euler_from_quaternion(Q[0], Q[1], Q[2], Q[3])
     print(f'{math.degrees(euler[0])} {math.degrees(euler[1])} {math.degrees(euler[2])}')
+

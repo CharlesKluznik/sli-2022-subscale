@@ -222,4 +222,3 @@ def print_eulers(Q: np.ndarray):
     """
     euler:list = euler_from_quaternion(Q[0], Q[1], Q[2], Q[3])
     print(f'{math.degrees(euler[0])} {math.degrees(euler[1])} {math.degrees(euler[2])}')
-

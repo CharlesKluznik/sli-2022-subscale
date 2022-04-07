@@ -55,14 +55,18 @@ def get_timestamp() -> str:
 
 def clean_data(fName: str):
     MAX_LONG = 2147483647
+    AVERAGE_LINES_PER_SECOND = 98.4
     overflowed = 0
     PRESSURE_CUTOFF = 600
     SECS_BEFORE_APOGEE = 20
     SECS_AFTER_APOGEE = 150
+    LINES_BEFORE_APOGEE = SECS_BEFORE_APOGEE * AVERAGE_LINES_PER_SECOND
+    LINES_AFTER_APOGEE = SECS_AFTER_APOGEE * AVERAGE_LINES_PER_SECOND
     data = np.loadtxt(fName, skiprows=10, dtype=float)
     barom = data[:, 1]
     apogee_index = np.where(barom==min(barom))[0][0]
-    lines_written = 0
+    print(apogee_index)
+    lines_written = lines_read = 0
     last_t = 0
     with open(fName, 'r') as inFile:
         with open(os.path.join(sys.path[0], 'cleaned_data.txt'), 'w') as outFile:
@@ -71,6 +75,7 @@ def clean_data(fName: str):
                 line = inFile.readline()
             while line:
                 line = inFile.readline()
+                lines_read += 1
                 if len(line) > 0:
                     tokens = line.split(' ')
                     tokens[0] = int(tokens[0])
@@ -79,7 +84,7 @@ def clean_data(fName: str):
                         overflowed += 1
                         print("Overflowed!")
                     last_t = tokens[0]
-                    tokens[0] = tokens[0] + overflowed * MAX_LONG;
+                    tokens[0] = tokens[0] + overflowed * MAX_LONG
                     #get gyroscope measurements
                     gyro1: list = [float(tokens[3]), float(tokens[4]), float(tokens[5])]
                     gyro2: list = [float(tokens[11]), float(tokens[12]), float(tokens[13])]
@@ -94,10 +99,10 @@ def clean_data(fName: str):
                     if lines_written == 0:
                         launchpad_baro = baro[0]
                         
-                    if (data[apogee_index][0] - (SECS_BEFORE_APOGEE * 1e6) < float(tokens[0]) 
-                        and float(tokens[0]) < data[apogee_index][0] + (SECS_AFTER_APOGEE * 1e6) 
-                        and not ('�' in line) ):
-                        if (baro[0] > launchpad_baro - PRESSURE_CUTOFF and float(tokens[0]) > data[apogee_index][0]): line = False    
+                    if ((lines_read > apogee_index - LINES_BEFORE_APOGEE) 
+                    and (lines_read < apogee_index + LINES_AFTER_APOGEE)
+                    and not ('�' in line) ):
+                        if (baro[0] > launchpad_baro - PRESSURE_CUTOFF and lines_read > apogee_index): line = False    
                         outFile.write(f'{tokens[0]} {gyro[0]} {gyro[1]} {gyro[2]} {accel[0]} {accel[1]} {accel[2]} {baro[0]} {baro[1]}\n')
                         lines_written+=1
 
